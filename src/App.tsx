@@ -14,6 +14,7 @@ import {
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 const STORAGE_KEY = "yuki-ai-prompt-studio-data";
+const ACTIVE_VIEW_STORAGE_KEY = "yuki-ai-prompt-studio-active-view";
 const TARGET_AIS = ["ChatGPT", "Codex", "その他"] as const;
 const CATEGORIES = ["アプリ開発", "資料整理", "エラー調査", "文章作成", "生活", "その他"] as const;
 const RATINGS = [
@@ -140,6 +141,15 @@ function loadData(): AppData {
   }
 }
 
+function isView(value: unknown): value is View {
+  return value === "create" || value === "list" || value === "settings";
+}
+
+function loadActiveView(): View {
+  const savedView = localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY);
+  return isView(savedView) ? savedView : "create";
+}
+
 function ratingLabel(rating: Rating) {
   return rating === null ? "未評価" : `★${rating}`;
 }
@@ -173,7 +183,7 @@ function makeWholePromptText(prompt: PromptDraft | PromptItem) {
 }
 
 function App() {
-  const [activeView, setActiveView] = useState<View>("create");
+  const [activeView, setActiveView] = useState<View>(() => loadActiveView());
   const [data, setData] = useState<AppData>(() => loadData());
   const [draft, setDraft] = useState<PromptDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -189,6 +199,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [data]);
+
+  useEffect(() => {
+    localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, activeView);
+  }, [activeView]);
 
   useEffect(() => {
     if (!toast) return;
