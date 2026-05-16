@@ -127,6 +127,50 @@ h3 {
   gap: 18px;
 }
 
+.template-panel {
+  background: #f8fbff;
+  border: 1px solid #d7e2f3;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.template-panel-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.template-panel-head h3 {
+  margin-bottom: 4px;
+}
+
+.template-panel-head p {
+  color: var(--muted);
+  line-height: 1.55;
+  margin-bottom: 0;
+}
+
+.template-controls {
+  align-items: end;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto;
+}
+
+.template-panel:first-of-type .template-controls {
+  grid-template-columns: minmax(260px, 1fr) auto;
+}
+
+.template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .grid {
   display: grid;
   gap: 16px;
@@ -527,8 +571,14 @@ textarea:focus {
   .filters,
   .settings-layout,
   .card-grid,
+  .template-controls,
+  .template-panel:first-of-type .template-controls,
   .grid.two {
     grid-template-columns: 1fr;
+  }
+
+  .template-actions {
+    justify-content: flex-start;
   }
 
   .detail-grid {
@@ -554,7 +604,8 @@ textarea:focus {
 
   .form-actions,
   .settings-actions,
-  .card-actions {
+  .card-actions,
+  .template-actions {
     flex-direction: column;
   }
 
@@ -562,7 +613,8 @@ textarea:focus {
   .secondary-button,
   .ghost-button,
   .danger-button,
-  .card-actions button {
+  .card-actions button,
+  .template-actions button {
     width: 100%;
   }
 

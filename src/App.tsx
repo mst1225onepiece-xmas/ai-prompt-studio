@@ -12,6 +12,12 @@ import {
   X,
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ITEM_TEMPLATES,
+  TEMPLATE_FIELD_LABELS,
+  USAGE_TEMPLATES,
+  type TemplateFieldKey,
+} from "./promptTemplates";
 
 const STORAGE_KEY = "yuki-ai-prompt-studio-data";
 const ACTIVE_VIEW_STORAGE_KEY = "yuki-ai-prompt-studio-active-view";
@@ -194,6 +200,9 @@ function App() {
   const [categoryFilter, setCategoryFilter] = useState("すべて");
   const [ratingFilter, setRatingFilter] = useState("すべて");
   const [sortKey, setSortKey] = useState<SortKey>("updatedAt");
+  const [selectedUsageTemplateId, setSelectedUsageTemplateId] = useState("");
+  const [itemTemplateTarget, setItemTemplateTarget] = useState<TemplateFieldKey>("purpose");
+  const [selectedItemTemplateId, setSelectedItemTemplateId] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -247,8 +256,71 @@ function App() {
       });
   }, [aiFilter, categoryFilter, data.prompts, query, ratingFilter, sortKey]);
 
+  const selectedUsageTemplate = useMemo(
+    () => USAGE_TEMPLATES.find((template) => template.id === selectedUsageTemplateId) ?? null,
+    [selectedUsageTemplateId],
+  );
+
+  const availableItemTemplates = useMemo(
+    () => ITEM_TEMPLATES.filter((template) => template.field === itemTemplateTarget),
+    [itemTemplateTarget],
+  );
+
+  const selectedItemTemplate = useMemo(
+    () => availableItemTemplates.find((template) => template.id === selectedItemTemplateId) ?? null,
+    [availableItemTemplates, selectedItemTemplateId],
+  );
+
   function updateDraft<K extends keyof PromptDraft>(key: K, value: PromptDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function applyUsageTemplate(onlyEmpty: boolean) {
+    if (!selectedUsageTemplate) {
+      setToast("用途テンプレを選択してください");
+      return;
+    }
+
+    const templateFields = selectedUsageTemplate.fields;
+    const fieldKeys = Object.keys(templateFields) as TemplateFieldKey[];
+    const hasExistingInput = fieldKeys.some((key) => String(draft[key]).trim().length > 0);
+
+    if (!onlyEmpty && hasExistingInput) {
+      const confirmed = window.confirm("目的、依頼、前提情報、注意点、出力形式をテンプレ内容で上書きします。よろしいですか？");
+      if (!confirmed) return;
+    }
+
+    setDraft((current) => {
+      const nextDraft = { ...current };
+      fieldKeys.forEach((key) => {
+        if (!onlyEmpty || String(nextDraft[key]).trim().length === 0) {
+          nextDraft[key] = templateFields[key];
+        }
+      });
+      return nextDraft;
+    });
+    setToast(onlyEmpty ? "空欄に用途テンプレを反映しました" : "用途テンプレで上書きしました");
+  }
+
+  function applyItemTemplate(mode: "append" | "overwrite") {
+    if (!selectedItemTemplate) {
+      setToast("項目テンプレを選択してください");
+      return;
+    }
+
+    setDraft((current) => {
+      const currentText = String(current[itemTemplateTarget]);
+      const nextText =
+        mode === "append" && currentText.trim().length > 0
+          ? `${currentText.trimEnd()}\n\n${selectedItemTemplate.text}`
+          : selectedItemTemplate.text;
+
+      return {
+        ...current,
+        [itemTemplateTarget]: nextText,
+      };
+    });
+    setToast(`${TEMPLATE_FIELD_LABELS[itemTemplateTarget]}に項目テンプレを反映しました`);
   }
 
   async function copyText(text: string, label: string) {
@@ -403,6 +475,79 @@ function App() {
             </div>
 
             <form className="prompt-form" onSubmit={handleSave}>
+              <section className="template-panel" aria-label="用途テンプレ">
+                <div className="template-panel-head">
+                  <div>
+                    <h3>用途テンプレ</h3>
+                    <p>目的・依頼・前提情報・注意点・出力形式をまとめて反映できます。</p>
+                  </div>
+                </div>
+                <div className="template-controls">
+                  <Field label="用途テンプレ">
+                    <select value={selectedUsageTemplateId} onChange={(event) => setSelectedUsageTemplateId(event.target.value)}>
+                      <option value="">選択してください</option>
+                      {USAGE_TEMPLATES.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="template-actions">
+                    <button type="button" className="secondary-button" onClick={() => applyUsageTemplate(true)}>
+                      空欄だけ反映
+                    </button>
+                    <button type="button" className="secondary-button" onClick={() => applyUsageTemplate(false)}>
+                      すべて上書き
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="template-panel" aria-label="項目テンプレ">
+                <div className="template-panel-head">
+                  <div>
+                    <h3>項目テンプレ</h3>
+                    <p>選んだ項目だけに、よく使う文章を追記または上書きできます。</p>
+                  </div>
+                </div>
+                <div className="template-controls">
+                  <Field label="反映先の項目">
+                    <select
+                      value={itemTemplateTarget}
+                      onChange={(event) => {
+                        setItemTemplateTarget(event.target.value as TemplateFieldKey);
+                        setSelectedItemTemplateId("");
+                      }}
+                    >
+                      {(Object.keys(TEMPLATE_FIELD_LABELS) as TemplateFieldKey[]).map((key) => (
+                        <option key={key} value={key}>
+                          {TEMPLATE_FIELD_LABELS[key]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="項目テンプレ">
+                    <select value={selectedItemTemplateId} onChange={(event) => setSelectedItemTemplateId(event.target.value)}>
+                      <option value="">テンプレを選択</option>
+                      {availableItemTemplates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.categoryName} / {template.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="template-actions">
+                    <button type="button" className="secondary-button" onClick={() => applyItemTemplate("append")}>
+                      追記
+                    </button>
+                    <button type="button" className="secondary-button" onClick={() => applyItemTemplate("overwrite")}>
+                      上書き
+                    </button>
+                  </div>
+                </div>
+              </section>
+
               <div className="grid two">
                 <Field label="プロンプト名" required>
                   <input value={draft.title} onChange={(event) => updateDraft("title", event.target.value)} />
