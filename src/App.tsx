@@ -203,7 +203,8 @@ function App() {
   const [selectedUsageTemplateId, setSelectedUsageTemplateId] = useState("");
   const [itemTemplateTarget, setItemTemplateTarget] = useState<TemplateFieldKey>("purpose");
   const [selectedItemTemplateId, setSelectedItemTemplateId] = useState("");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const addFileInputRef = useRef<HTMLInputElement | null>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -412,32 +413,88 @@ function App() {
     setToast("JSONをエクスポートしました");
   }
 
-  function importJson(event: ChangeEvent<HTMLInputElement>) {
+  function readImportedPrompts(readerResult: string | ArrayBuffer | null) {
+    const parsed = JSON.parse(String(readerResult)) as unknown;
+    if (!parsed || typeof parsed !== "object") throw new Error("JSONの形式が正しくありません");
+    const imported = parsed as Record<string, unknown>;
+    if (!Array.isArray(imported.prompts)) throw new Error("prompts が配列ではありません");
+
+    const prompts = imported.prompts.map(normalizeImportedPrompt);
+    const invalidCount = prompts.filter((prompt) => prompt === null).length;
+    if (invalidCount > 0) {
+      throw new Error(
+        `必須項目 id, title, targetAi, category, body が不足しているデータがあります。\n読み込み件数: ${imported.prompts.length}件\nエラー件数: ${invalidCount}件`,
+      );
+    }
+
+    return {
+      totalCount: imported.prompts.length,
+      prompts: prompts as PromptItem[],
+    };
+  }
+
+  function importJsonAdditive(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const { totalCount, prompts } = readImportedPrompts(reader.result);
+        const existingIds = new Set(data.prompts.map((prompt) => prompt.id));
+        const importedIds = new Set<string>();
+        const newPrompts: PromptItem[] = [];
+        let duplicateCount = 0;
+
+        prompts.forEach((prompt) => {
+          if (existingIds.has(prompt.id) || importedIds.has(prompt.id)) {
+            duplicateCount += 1;
+            return;
+          }
+          importedIds.add(prompt.id);
+          newPrompts.push(prompt);
+        });
+
+        if (newPrompts.length > 0) {
+          setData((current) => ({
+            prompts: [...newPrompts, ...current.prompts],
+            settings: { version: 1 },
+          }));
+        }
+
+        setSelectedId(null);
+        setToast(`${newPrompts.length}件を追加しました`);
+        window.alert(
+          `JSON追加インポートが完了しました。\n\n読み込み件数: ${totalCount}件\n新規追加件数: ${newPrompts.length}件\n重複スキップ件数: ${duplicateCount}件\nエラー件数: 0件`,
+        );
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "JSONを読み込めませんでした");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function importJsonReplace(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
 
     const confirmed = window.confirm(
-      "現在のデータをインポートしたJSONで置き換えます。\n事前にJSONエクスポートでバックアップすることをおすすめします。\n続行しますか？",
+      "JSON全上書き復元を実行します。\n\n現在のデータは削除され、読み込んだJSONの内容で置き換わります。\n必ず事前にJSONエクスポートでバックアップしてください。\n通常は「JSON追加インポート」を使う方が安全です。\n\n続行しますか？",
     );
     if (!confirmed) return;
 
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const parsed = JSON.parse(String(reader.result)) as unknown;
-        if (!parsed || typeof parsed !== "object") throw new Error("JSONの形式が正しくありません");
-        const imported = parsed as Record<string, unknown>;
-        if (!Array.isArray(imported.prompts)) throw new Error("prompts が配列ではありません");
-        const prompts = imported.prompts.map(normalizeImportedPrompt);
-        if (prompts.some((prompt) => prompt === null)) {
-          throw new Error("必須項目 id, title, targetAi, category, body が不足しているデータがあります");
-        }
-        setData({ prompts: prompts as PromptItem[], settings: { version: 1 } });
+        const { totalCount, prompts } = readImportedPrompts(reader.result);
+        setData({ prompts, settings: { version: 1 } });
         setSelectedId(null);
         setEditingId(null);
         setDraft(emptyDraft);
-        setToast("JSONをインポートしました");
+        setToast("JSON全上書き復元が完了しました");
+        window.alert(`JSON全上書き復元が完了しました。\n\n読み込み件数: ${totalCount}件`);
       } catch (error) {
         window.alert(error instanceof Error ? error.message : "JSONを読み込めませんでした");
       }
@@ -748,11 +805,44 @@ function App() {
                     <Download size={18} />
                     JSONエクスポート
                   </button>
-                  <button type="button" className="secondary-button" onClick={() => fileInputRef.current?.click()}>
-                    <Upload size={18} />
-                    JSONインポート
-                  </button>
-                  <input ref={fileInputRef} className="hidden-input" type="file" accept="application/json" onChange={importJson} />
+                </div>
+                <div className="import-options">
+                  <div className="import-option">
+                    <div>
+                      <h4>JSON追加インポート</h4>
+                      <p>既存データを残して、新しいプロンプトだけ追加します。同じidのプロンプトはスキップします。</p>
+                    </div>
+                    <button type="button" className="secondary-button" onClick={() => addFileInputRef.current?.click()}>
+                      <Upload size={18} />
+                      JSON追加インポート
+                    </button>
+                    <input
+                      ref={addFileInputRef}
+                      className="hidden-input"
+                      type="file"
+                      accept="application/json"
+                      onChange={importJsonAdditive}
+                    />
+                  </div>
+                  <div className="import-option danger-import">
+                    <div>
+                      <h4>JSON全上書き復元</h4>
+                      <p>
+                        現在のデータを削除して、JSONの内容で置き換えます。必ず事前にJSONエクスポートしてください。
+                      </p>
+                    </div>
+                    <button type="button" className="danger-button" onClick={() => replaceFileInputRef.current?.click()}>
+                      <Upload size={18} />
+                      JSON全上書き復元
+                    </button>
+                    <input
+                      ref={replaceFileInputRef}
+                      className="hidden-input"
+                      type="file"
+                      accept="application/json"
+                      onChange={importJsonReplace}
+                    />
+                  </div>
                 </div>
               </div>
 

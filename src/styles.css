@@ -425,6 +425,38 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.import-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.import-option {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e1e8f3;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.import-option h4 {
+  margin-bottom: 4px;
+}
+
+.import-option p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 0;
+}
+
+.danger-import {
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
 .warning-panel {
   background: #fffdf7;
   border-color: #f5df9f;
@@ -571,6 +603,7 @@ textarea:focus {
   .filters,
   .settings-layout,
   .card-grid,
+  .import-option,
   .template-controls,
   .template-panel:first-of-type .template-controls,
   .grid.two {
